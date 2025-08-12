@@ -1,312 +1,532 @@
 // ==UserScript==
 // @name         Quip vs Boost Compare Tool
-// @namespace    http://tampermonkey.net/
-// @version      1.0
+// @namespace    https://github.com/ajfriend90/tampermonkey
+// @version      2.0
 // @description  Load exported CSVs of Quip and Boost and display Asset IDs for discrepencies
 // @author       ajfriend
 // @match        *://*.quip-amazon.com/*
 // @match        *://*.boost.aws.a2z.com/platform*
-// @grant        none
+// @icon         https://www.google.com/s2/favicons?sz=64&domain=quip-amazon.com
+// @require      https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js
+// @grant        GM_registerMenuCommand
+// @run-at       document-idle
+// @updateURL    https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/quip-vs-boost-compare-tool/quip-vs-boost-compare-tool.user.js
+// @downloadURL  https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/quip-vs-boost-compare-tool/quip-vs-boost-compare-tool.user.js
 // ==/UserScript==
 
 (function () {
-    'use strict';
+  'use strict';
+    let quipFiles = [];
+    let boostFile = null;
+    let resultsWin = null;
 
-    let quipAssets = new Set();
-    let boostAssets = new Set();
-    let quipStatusMap = new Map();
-
-    function createButton() {
-        if (document.getElementById("csv-tools-container")) return;
-
-        let container = document.createElement("div");
-        container.id = "csv-tools-container";
-        container.style.position = "fixed";
-        container.style.top = "10px";
-        container.style.right = "10px";
-        container.style.zIndex = "9999";
-        container.style.padding = "5px";
-        container.style.background = "rgba(255, 255, 255, 0.9)";
-        container.style.border = "1px solid #ddd";
-        container.style.borderRadius = "50%";
-        container.style.boxShadow = "0 4px 8px rgba(0,0,0,0.1)";
-        container.style.width = "40px";
-        container.style.height = "40px";
-        container.style.display = "flex";
-        container.style.justifyContent = "center";
-        container.style.alignItems = "center";
-        container.style.transition = "width 0.3s ease, border-radius 0.3s ease";
-
-        // Icon
-        let icon = document.createElement("div");
-        icon.textContent = "⚙️";
-        icon.style.cursor = "pointer";
-        icon.style.fontSize = "20px";
-        icon.style.userSelect = "none";
-        container.appendChild(icon);
-
-        // Load CSVs Button
-        let loadButton = document.createElement("button");
-        loadButton.textContent = "🔄 Compare CSVs";
-        loadButton.style.padding = "6px 10px";
-        loadButton.style.background = "#3498db";
-        loadButton.style.color = "white";
-        loadButton.style.border = "none";
-        loadButton.style.borderRadius = "6px";
-        loadButton.style.cursor = "pointer";
-        loadButton.style.fontWeight = "bold";
-        loadButton.style.display = "none";
-
-        // Instructions Button
-        let instructionsButton = document.createElement("button");
-        instructionsButton.textContent = "ℹ️ How to Use";
-        instructionsButton.style.padding = "6px 10px";
-        instructionsButton.style.background = "#95a5a6";
-        instructionsButton.style.color = "white";
-        instructionsButton.style.border = "none";
-        instructionsButton.style.borderRadius = "6px";
-        instructionsButton.style.cursor = "pointer";
-        instructionsButton.style.display = "none";
-
-        container.appendChild(loadButton);
-        container.appendChild(instructionsButton);
-
-        // Hover behavior
-        container.addEventListener('mouseenter', () => {
-            container.style.width = "220px";
-            container.style.borderRadius = "8px";
-            icon.style.display = "none";
-            loadButton.style.display = "block";
-            instructionsButton.style.display = "block";
-            container.style.gap = "5px";
+    function showInstructionsModal() {
+        const overlay = document.createElement('div');
+        Object.assign(overlay.style, {
+            position: 'fixed',
+            top: 0, left: 0, width: '100%', height: '100%',
+            background: 'rgba(11,15,20,0.55)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 999999
         });
 
-        container.addEventListener('mouseleave', () => {
-            container.style.width = "40px";
-            container.style.borderRadius = "50%";
-            icon.style.display = "block";
-            loadButton.style.display = "none";
-            instructionsButton.style.display = "none";
-            container.style.gap = "0px";
+        const modal = document.createElement('div');
+        Object.assign(modal.style, {
+            background: '#111823',
+            color: '#e6edf3',
+            padding: '20px 24px',
+            borderRadius: '10px',
+            textAlign: 'left',
+            minWidth: '360px',
+            maxWidth: '520px',
+            boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+            fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif',
+            border: '1px solid #1e293b'
         });
 
-        loadButton.onclick = startCSVSelection;
-        instructionsButton.onclick = showInstructions;
+        modal.style.transform = 'scale(0.96)';
+        modal.style.opacity = '0';
+        modal.style.transition = 'transform 120ms ease, opacity 120ms ease';
+        overlay.style.opacity = '0';
+        overlay.style.transition = 'opacity 120ms ease';
 
-        document.body.appendChild(container);
-    }
+        const title = document.createElement('h3');
+        Object.assign(title.style, { margin: '0 0 10px 0', fontSize: '16px' });
+        title.textContent = 'How to use: Quip ↔ Boost Compare';
 
-    function startCSVSelection() {
-        alert("📂 Please select the **Quip CSV file**");
+        const body = document.createElement('div');
+        body.innerHTML = `
+  <ol style="margin:0 0 12px 18px; padding:0; line-height:1.5;">
+    <li>Click <b>Compare CSVs</b> from the Tampermonkey menu.</li>
+    <li>In the dialog, click <b>Add Quip CSV</b> to select a Quip export (.csv). Repeat to add as many as needed
+        (filenames will list in the box).</li>
+    <li>Click <b>Done</b> to proceed.</li>
+    <li>When prompted, click <b>Pick CSV</b> and select your <b>Boost</b> export (.csv).</li>
+    <li>A results window opens showing:
+      <ul style="margin:6px 0 0 18px; padding:0;">
+        <li><b>Quip-only</b> (after status filter)</li>
+        <li><b>Boost-only</b></li>
+        <li><b>Matched assets</b> count in the header</li>
+      </ul>
+    </li>
+  </ol>
+  <p style="margin:8px 0 0 0; color:#9aa7b0; font-size:13px;">
+    Tip: You can cancel any dialog by clicking outside it. The results popup can stay open for copy/paste while you work.
+  </p>
+  <p style="margin:6px 0 0 0; color:#9aa7b0; font-size:13px;">
+    Status filter: excludes any status containing “handed off / handed-off”.
+  </p>
+`;
 
-        let quipInput = document.createElement("input");
-        quipInput.type = "file";
-        quipInput.accept = ".csv";
-        quipInput.onchange = function (e) {
-            let reader = new FileReader();
-            reader.onload = handleQuipCSV;
-            reader.readAsText(e.target.files[0]);
-        };
-        quipInput.click();
-    }
-
-    function handleQuipCSV(event) {
-        let lines = event.target.result.split("\n").map(line => line.split(","));
-        let headers = lines[1].map(h => h.replace(/["']/g, "").trim()); // Clean headers
-
-        let quipIndex = headers.indexOf("Asset");
-
-        if (quipIndex === -1) {
-            alert("⚠ Asset ID column **not found** in Quip CSV!\nCheck column names.");
-            return;
-        }
-
-        // Find index of "Status" column
-        let statusIndex = headers.indexOf("Status");
-
-        quipStatusMap = new Map();
-
-        lines.slice(2).forEach(row => {
-            let asset = row[quipIndex]?.trim().replace(/^"|"$/g, "");
-            let status = row[statusIndex]?.trim().toLowerCase();
-
-                if (asset) {
-                    // Convert from scientific notation if needed
-                    if (/^\d+(\.\d+)?e\+\d+$/i.test(asset)) {
-                        asset = Number(asset).toFixed(0);
-                    }
-
-                    if (/^\d+$/.test(asset)) {
-                        quipAssets.add(asset);
-                        quipStatusMap.set(asset, (status || "").trim().toLowerCase());
-                    }
-                }
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        Object.assign(closeBtn.style, {
+            marginTop: '10px',
+            padding: '8px 14px',
+            fontSize: '14px',
+            fontWeight: 'bold',
+            backgroundColor: '#3b82f6',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '4px',
+            cursor: 'pointer'
         });
+        closeBtn.addEventListener('mouseover', () => { closeBtn.style.backgroundColor = '#2563eb'; });
+        closeBtn.addEventListener('mouseout', () => { closeBtn.style.backgroundColor = '#3b82f6'; });
+        closeBtn.addEventListener('click', () => overlay.remove(), { once: true });
 
-        // Extract Asset IDs
-        quipAssets = new Set(
-            lines.slice(1) // Skip headers
-                .map(row => row[quipIndex]?.trim())
-                .filter(id => id && /^\d+$/.test(id)) // Only numeric IDs
-        );
+        modal.appendChild(title);
+        modal.appendChild(body);
+        modal.appendChild(closeBtn);
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
 
-        alert("✅ Quip CSV loaded! Now select **Boost CSV**.");
-
-        let boostInput = document.createElement("input");
-        boostInput.type = "file";
-        boostInput.accept = ".csv";
-        boostInput.onchange = function (e) {
-            let reader = new FileReader();
-            reader.onload = handleBoostCSV;
-            reader.readAsText(e.target.files[0]);
-        };
-        boostInput.click();
+        requestAnimationFrame(() => {
+            overlay.style.opacity = '1';
+            modal.style.transform = 'scale(1)';
+            modal.style.opacity = '1';
+        });
     }
 
-    function handleBoostCSV(event) {
-        let lines = event.target.result.split("\n").map(line => line.split(","));
+    function showQuipCollectorModal() {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            Object.assign(overlay.style, {
+                position: 'fixed', top: 0, left: 0, width: '100%', height: '100%',
+                background: 'rgba(11,15,20,0.55)', backdropFilter: 'blur(6px)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 999999
+            });
 
-        if (lines.length < 2) {
-            alert("⚠ Boost CSV is empty or unreadable!");
-            return;
-        }
+            const modal = document.createElement('div');
+            Object.assign(modal.style, {
+                background: '#111823', color: '#e6edf3', padding: '20px 24px',
+                borderRadius: '10px', textAlign: 'left', minWidth: '360px', maxWidth: '520px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)', border: '1px solid #1e293b',
+                fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif',
+                transform: 'scale(0.96)', opacity: '0', transition: 'transform 120ms ease, opacity 120ms ease'
+            });
+            overlay.style.opacity = '0'; overlay.style.transition = 'opacity 120ms ease';
 
-        let headers = lines[0].map(h => h.replace(/["']/g, "").trim()); // Use row 1 for headers
+            const title = document.createElement('h3');
+            title.textContent = 'Add one or more Quip CSVs';
+            Object.assign(title.style, { margin: '0 0 10px 0', fontSize: '16px' });
 
-        let boostIndex = headers.findIndex(h => h.trim().toLowerCase() === "asset id");
+            const list = document.createElement('div');
+            list.style.cssText = `
+      margin: 8px 0 12px 0; padding: 8px 10px; background:#0f172a; border:1px solid #1e293b; border-radius:8px;
+      max-height: 180px; overflow:auto; font-size:12px; white-space:pre-wrap;
+    `;
+            list.textContent = 'None added yet.';
 
-        if (boostIndex === -1) {
-            console.error("❌ 'Asset id' column NOT found! Boost Headers:", headers);
-            alert("⚠ Asset ID column not found in Boost CSV! Check column names.");
-            return;
-        }
+            const row = document.createElement('div');
+            row.style.display = 'flex'; row.style.gap = '8px';
 
-        // Extract Asset IDs, skipping headers
-        boostAssets = new Set();
+            const addBtn = document.createElement('button');
+            addBtn.textContent = 'Add Quip CSV';
+            Object.assign(addBtn.style, {
+                padding:'8px 12px', fontSize:'14px', fontWeight:'bold', backgroundColor:'#3b82f6', color:'#fff',
+                border:'none', borderRadius:'4px', cursor:'pointer'
+            });
 
-        lines.slice(1).forEach((row, i) => { // Start at row 1 (skip headers)
-            if (row.length > boostIndex) {
-                let asset = row[boostIndex].replace(/["']/g, "").trim(); // Remove extra quotes
-                if (/^\d+$/.test(asset)) { // Only numeric IDs
-                    boostAssets.add(asset);
-                } else {
-                    console.warn(`⚠ Skipping non-numeric asset at row ${i + 1}:`, asset);
-                }
-            } else {
-                console.warn(`⚠ Skipping row ${i + 1} - Not enough columns:`, row);
+            const doneBtn = document.createElement('button');
+            doneBtn.textContent = 'Done';
+            Object.assign(doneBtn.style, {
+                padding:'8px 12px', fontSize:'14px', fontWeight:'bold', backgroundColor:'#16a34a', color:'#fff',
+                border:'none', borderRadius:'4px', cursor:'pointer'
+            });
+
+            function refreshList() {
+                list.textContent = quipFiles.length
+                    ? quipFiles.map(f => `• ${f.name}`).join('\n')
+                : 'None added yet.';
             }
+
+            addBtn.addEventListener('mouseover', () => { addBtn.style.backgroundColor = '#2563eb'; });
+            addBtn.addEventListener('mouseout', () => { addBtn.style.backgroundColor = '#3b82f6'; });
+            doneBtn.addEventListener('mouseover', () => { doneBtn.style.backgroundColor = '#15803d'; });
+            doneBtn.addEventListener('mouseout', () => { doneBtn.style.backgroundColor = '#16a34a'; });
+
+            addBtn.addEventListener('click', async () => {
+                const f = await pickCSV();
+                if (f) {
+                    quipFiles.push(f);
+                    refreshList();
+                }
+            });
+
+            doneBtn.addEventListener('click', () => { overlay.remove(); resolve(quipFiles.length > 0); });
+
+            // click-outside cancels
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) { overlay.remove(); resolve(false); }
+            });
+
+            row.appendChild(addBtn); row.appendChild(doneBtn);
+            modal.appendChild(title); modal.appendChild(list); modal.appendChild(row);
+            overlay.appendChild(modal); document.body.appendChild(overlay);
+
+            requestAnimationFrame(() => { overlay.style.opacity = '1'; modal.style.transform = 'scale(1)'; modal.style.opacity = '1'; });
         });
-
-        alert("✅ Boost CSV loaded! Now displaying assets...");
-
-        compareResults();
     }
 
-    function compareResults() {
-        // Assets in Quip but not in Boost, excluding 'Handed-Off' or 'NML Handed Off'
-        let onlyInQuip = [...quipAssets].filter(asset =>
-                                                !boostAssets.has(asset) &&
-                                                !["handed-off", "nml handed off"].includes(quipStatusMap.get(asset))
-                                               );
+    function showBoostCollectorModal(label, onPick) {
+        return new Promise((resolve) => {
+            const overlay = document.createElement('div');
+            Object.assign(overlay.style, {
+                position: 'fixed',
+                top: 0, left: 0, width: '100%', height: '100%',
+                background: 'rgba(11,15,20,0.55)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                zIndex: 999999
+            });
 
-        // Assets in Boost but not in Quip
-        let onlyInBoost = [...boostAssets].filter(asset => !quipAssets.has(asset));
+            const modal = document.createElement('div');
+            Object.assign(modal.style, {
+                background: '#111823',
+                color: '#e6edf3',
+                padding: '20px 30px',
+                borderRadius: '10px',
+                textAlign: 'center',
+                minWidth: '280px',
+                boxShadow: '0 4px 12px rgba(0,0,0,0.5)',
+                fontFamily: 'system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Arial, sans-serif',
+                border: '1px solid #1e293b',
+                transform: 'scale(0.96)',
+                opacity: '0',
+                transition: 'transform 120ms ease, opacity 120ms ease'
+            });
+            overlay.style.opacity = '0';
+            overlay.style.transition = 'opacity 120ms ease';
 
-        // Prepare results for display
-        let resultText = `✅ Total Matching Asset IDs: ${quipAssets.size - onlyInQuip.length}\n\n`;
+            const msg = document.createElement('p');
+            msg.textContent = label;
+            Object.assign(msg.style, { marginBottom: '15px', fontSize: '15px', fontWeight: 'bold' });
 
-        resultText += "❌ Only in Quip (after filtering 'Handed-Off'):\n";
-        resultText += onlyInQuip.length > 0 ? onlyInQuip.join("\n") : "None";
-        resultText += "\n\n";
+            const pickBtn = document.createElement('button');
+            pickBtn.textContent = 'Pick CSV';
+            Object.assign(pickBtn.style, {
+                padding: '8px 16px', fontSize: '14px', fontWeight: 'bold',
+                backgroundColor: '#3b82f6', color: '#fff', border: 'none',
+                borderRadius: '4px', cursor: 'pointer', transition: 'background-color 0.2s ease'
+            });
+            pickBtn.addEventListener('mouseover', () => { pickBtn.style.backgroundColor = '#2563eb'; });
+            pickBtn.addEventListener('mouseout', () => { pickBtn.style.backgroundColor = '#3b82f6'; });
 
-        resultText += "❌ Only in Boost:\n";
-        resultText += onlyInBoost.length > 0 ? onlyInBoost.join("\n") : "None";
+            pickBtn.addEventListener('click', async () => {
+                await onPick();
+                overlay.remove();
+                resolve(true);
+            }, { once: true });
 
-        displayResults(resultText);
-    }
-
-	function displayResults(resultText) {
-		let resultWindow = window.open("", "CSV Comparison Results", "width=800,height=600");
-		resultWindow.document.write(`
-			<html>
-			<head>
-				<title>CSV Comparison Results</title>
-				<style>
-					body {
-						font-family: Arial, sans-serif;
-						padding: 15px;
-						line-height: 1.5;
-						white-space: pre-wrap;
-					}
-					button {
-						margin-top: 20px;
-						padding: 10px 15px;
-						background-color: #3498db;
-						color: #fff;
-						border: none;
-						border-radius: 5px;
-						cursor: pointer;
-					}
-				</style>
-			</head>
-			<body>
-				<pre>${resultText}</pre>
-				<button onclick="window.close()">Close</button>
-			</body>
-			</html>
-		`);
-		resultWindow.document.close();
-	}
-
-    function showInstructions() {
-        let instructionText = `
-        📖 How to Use Quip vs Boost CSV Comparator:
-        1️⃣ First, export both Quip and Boost WFs to CSV files.
-        2️⃣ For Quip, go to Rack Hand-Off tab, Template in top left, Export, CSV.
-        3️⃣ For Boost, go to Work Requests, set filters for AZ CMH51, OSU61, Status: In Progress, Rack usage: Non-network, and an appropriate Arrival Date range, then Export CSV in top right.
-        4️⃣ Click "🔄 Compare CSVs" to start comparison.
-        5️⃣ Select the CSV exported from Quip when prompted.
-        6️⃣ Next, select the CSV exported from Boost when prompted.
-        7️⃣ The script will compare the CSVs automatically and show the results in a pop-up window.
-        ⚠️ Make sure:
-        - Quip CSV has columns: "Asset" and "Status".
-        - Boost CSV has column: "Asset id".
-        ✅ Assets only in Quip (but not marked as "Handed-Off") and assets only in Boost will be clearly listed.
-        You can copy/paste results from the pop-up window for searching in the webpage.
-        `;
-
-        let instructionsWindow = window.open("", "Instructions", "width=600,height=500");
-        instructionsWindow.document.write(`
-        <html>
-        <head>
-            <title>Instructions</title>
-            <style>
-                body {
-                    font-family: Arial, sans-serif;
-                    padding: 20px;
-                    line-height: 1.6;
-                    white-space: pre-wrap;
+            overlay.addEventListener('click', (e) => {
+                if (e.target === overlay) {
+                    overlay.remove();
+                    resolve(false);
                 }
-                button {
-                    margin-top: 20px;
-                    padding: 8px 15px;
-                    background-color: #95a5a6;
-                    color: white;
-                    border: none;
-                    border-radius: 5px;
-                    cursor: pointer;
-                }
-            </style>
-        </head>
-        <body>
-            <pre>${instructionText}</pre>
-            <button onclick="window.close()">Close</button>
-        </body>
-        </html>
-    `);
-        instructionsWindow.document.close();
+            });
+
+            modal.appendChild(msg);
+            modal.appendChild(pickBtn);
+            overlay.appendChild(modal);
+            document.body.appendChild(overlay);
+
+            requestAnimationFrame(() => {
+                overlay.style.opacity = '1';
+                modal.style.transform = 'scale(1)';
+                modal.style.opacity = '1';
+            });
+        });
     }
 
-    // Inject the button when page loads
-    createButton();
+    function pickCSV() {
+        return new Promise((resolve) => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.csv,text/csv';
+            input.style.position = 'fixed';
+            input.style.left = '-9999px';
+            document.body.appendChild(input);
+            input.addEventListener('change', () => {
+                const file = input.files && input.files[0] ? input.files[0] : null;
+                input.remove();
+                resolve(file);
+            }, { once: true });
+            input.click();
+        });
+    }
+
+    function readFileUtf8(file) {
+        return new Promise((resolve) => {
+            const r = new FileReader();
+            r.onload = () => resolve(new TextDecoder('utf-8').decode(new Uint8Array(r.result)));
+            r.readAsArrayBuffer(file);
+        });
+    }
+
+    function parseCsv(text) {
+        const out = Papa.parse(text, {
+            header: false,
+            skipEmptyLines: true,
+            transform: v => (v ?? '').trim()
+        });
+        return out.data || [];
+    }
+
+    function findHeaderRow(rows) {
+        for (let i = 0; i < rows.length && i < 50; i++) {
+            for (let cell of rows[i]) {
+                const c = (cell || '').trim().toLowerCase();
+                if (c === 'asset' || c === 'asset id') {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    function findColumnIndices(rows, headerIndex) {
+        const header = rows[headerIndex] || [];
+        const key = s => (s || '').trim().toLowerCase();
+
+        let assetCol = -1;
+        let statusCol = -1;
+
+        for (let i = 0; i < header.length; i++) {
+            const h = key(header[i]);
+            if (assetCol === -1 && (h === 'asset' || h === 'asset id')) assetCol = i;
+            if (statusCol === -1 && h === 'status') statusCol = i;
+        }
+        return { assetCol, statusCol };
+    }
+
+    function normalizeAsset(s) {
+        // ensure not null or undefined is string and stripped of whitespace
+        let a = String(s ?? '').trim();
+
+        // strip outer quotes and thousands commas
+        a = a.replace(/^"(.*)"$/, '$1').replace(/^'(.*)'$/, '$1').replace(/,/g, '');
+
+        // scientific notation → integer string
+        if (/^\d+(\.\d+)?e\+\d+$/i.test(a)) {
+            const n = Number(a);
+            if (Number.isFinite(n)) a = n.toFixed(0);
+        }
+
+        // keep only pure digits
+        return /^\d+$/.test(a) ? a : '';
+    }
+
+    function buildQuipMap(rows, headerIndex, assetCol, statusCol) {
+        const map = new Map();
+        for (let i = headerIndex + 1; i < rows.length; i++) {
+            const rawAsset = rows[i][assetCol];
+            const asset = normalizeAsset(rawAsset);
+            const status = (rows[i][statusCol] || '').trim().toLowerCase();
+            if (asset) map.set(asset, status);
+        }
+        return map;
+    }
+
+    function buildBoostSet(rows, headerIndex, assetCol) {
+        const set = new Set();
+        for (let i = headerIndex + 1; i < rows.length; i++) {
+            const asset = normalizeAsset(rows[i][assetCol]);
+            if (asset) set.add(asset);
+        }
+        return set;
+    }
+
+    function compareAssets(quipMap, boostSet, includeFn) {
+        const inQuipNotBoost = [];
+        const inBoostNotQuip = [];
+        const matchedAssets = [];
+
+        for (const [asset, status] of quipMap.entries()) {
+            if (includeFn(status)) {
+                if (!boostSet.has(asset)) {
+                    inQuipNotBoost.push(asset);
+                } else {
+                    matchedAssets.push(asset);
+                }
+            }
+        }
+
+        for (const asset of boostSet) {
+            if (!quipMap.has(asset)) inBoostNotQuip.push(asset);
+        }
+
+        return { inQuipNotBoost, inBoostNotQuip, matchedAssets };
+    }
+
+    function showResultsPopup(inQuipNotBoost, inBoostNotQuip, matchedAssets) {
+        resultsWin = resultsWin && !resultsWin.closed ? resultsWin
+        : window.open('', 'CompareResults', 'width=640,height=800,scrollbars=yes,resizable=yes');
+        const popup = resultsWin;
+
+        const html = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>Compare Results</title>
+  <style>
+    :root { --bg:#0b0f14; --panel:#111823; --text:#e6edf3; --muted:#9aa7b0; --accent:#3b82f6; --border:#1e293b; --pre-bg:#0f172a; }
+    *{box-sizing:border-box}
+    body{margin:0;padding:16px 18px 24px;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial,sans-serif}
+    header{position:sticky;top:0;z-index:1;background:linear-gradient(to bottom,rgba(11,15,20,.95),rgba(11,15,20,.85));backdrop-filter:blur(6px);margin:-16px -18px 12px;padding:12px 18px;border-bottom:1px solid var(--border)}
+    h1{margin:0;font-size:16px;letter-spacing:.2px}
+    .muted{color:var(--muted)}
+    .grid{display:grid;gap:14px}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:10px;padding:12px}
+    .card h2{margin:0 0 6px 0;font-size:15px;display:flex;align-items:baseline;gap:8px}
+    .count{color:var(--muted);font-weight:600;font-size:12px}
+    .hint{margin:0 0 8px 0;font-size:12px;color:var(--muted)}
+    ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:520px;overflow:auto}
+    .item{
+      padding:6px 10px;border:1px solid var(--border);border-radius:8px;
+      background:var(--pre-bg);cursor:pointer;user-select:none;
+      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Roboto Mono","Liberation Mono",monospace;
+      font-size:12px;line-height:1.45;
+      transition: border-color .12s ease, background-color .12s ease, transform .06s ease;
+    }
+    .item:hover{ border-color:var(--accent) }
+    .item:active{ transform: scale(0.99) }
+    .item.copied{ outline:2px solid var(--accent); }
+    .item.done { text-decoration: line-through; opacity: 0.5;}
+    footer{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Quip ↔ Boost Comparison</h1>
+    <p class="muted">Matched assets: ${matchedAssets.length}</p>
+  </header>
+
+  <section class="grid">
+    <div class="card">
+      <h2>Quip-only <span class="count">(${inQuipNotBoost.length})</span></h2>
+      <p class="hint">Click an asset to copy</p>
+      <ul id="q-list"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Boost-only <span class="count">(${inBoostNotQuip.length})</span></h2>
+      <p class="hint">Click an asset to copy</p>
+      <ul id="b-list"></ul>
+    </div>
+  </section>
+
+  <footer class="muted">Window stays open for copy/paste. Resize as needed.</footer>
+
+  <script>
+    const Q = ${JSON.stringify(inQuipNotBoost)};
+    const B = ${JSON.stringify(inBoostNotQuip)};
+
+    function escapeHtml(str){ return String(str).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
+    function attrEsc(str){ return String(str).replace(/"/g,'&quot;').replace(/[&<>]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
+
+    function render(id, arr){
+      const ul = document.getElementById(id);
+      if(!ul) return;
+      ul.innerHTML = arr.length
+        ? arr.map(a => \`<li class="item" data-asset="\${attrEsc(a)}">\${escapeHtml(a)}</li>\`).join('')
+        : '<li class="item" style="opacity:.7;cursor:default">— none —</li>';
+    }
+
+    function copy(text){
+      if(navigator.clipboard && navigator.clipboard.writeText){
+        return navigator.clipboard.writeText(text);
+      }
+      const ta = document.createElement('textarea');
+      ta.value = text; document.body.appendChild(ta); ta.select();
+      try { document.execCommand('copy'); } catch(e) {}
+      ta.remove(); return Promise.resolve();
+    }
+
+    function onItemClick(e){
+      const li = e.target.closest('.item');
+      if(!li || li.style.cursor === 'default') return;
+      const text = li.dataset.asset || li.textContent || '';
+      copy(text).then(() => {
+        li.classList.add('copied');
+        li.classList.add('done');
+        setTimeout(() => li.classList.remove('copied'), 300);
+      });
+    }
+
+    document.addEventListener('click', onItemClick);
+    render('q-list', Q);
+    render('b-list', B);
+  </script>
+</body>
+</html>`;
+        popup.document.open();
+        popup.document.write(html);
+        popup.document.close();
+    }
+
+    GM_registerMenuCommand('Compare CSVs', async () => {
+        quipFiles = [];
+        const okQuip = await showQuipCollectorModal();
+        if (!okQuip) return;
+
+        const okBoost = await showBoostCollectorModal('Please choose your Boost CSV', async () => {
+            boostFile = await pickCSV();
+        });
+        if (!okBoost || !boostFile) return;
+
+        const quipMap = new Map();
+        for (const f of quipFiles) {
+            const txt = await readFileUtf8(f);
+            const rows = parseCsv(txt);
+            const headerIndex = findHeaderRow(rows);
+            if (headerIndex === -1) continue;
+            const { assetCol, statusCol } = findColumnIndices(rows, headerIndex);
+            if (assetCol === -1) continue;
+            const partial = buildQuipMap(rows, headerIndex, assetCol, statusCol);
+            for (const [asset, status] of partial.entries()) quipMap.set(asset, status);
+        }
+
+        const boostText = await readFileUtf8(boostFile);
+        const boostRows = parseCsv(boostText);
+        const boostHeaderIndex = findHeaderRow(boostRows);
+        if (boostHeaderIndex === -1) { alert('Could not find header row in Boost CSV.'); return; }
+        const { assetCol: boostAssetCol } = findColumnIndices(boostRows, boostHeaderIndex);
+        if (boostAssetCol === -1) { alert('Missing Asset column in Boost CSV.'); return; }
+        const boostSet = buildBoostSet(boostRows, boostHeaderIndex, boostAssetCol);
+
+        const include = (s) => !/\bhanded[-\s]?off\b/i.test(s || '');
+        const { inQuipNotBoost, inBoostNotQuip, matchedAssets } = compareAssets(quipMap, boostSet, include);
+        showResultsPopup(inQuipNotBoost, inBoostNotQuip, matchedAssets);
+    });
+
+    GM_registerMenuCommand('How to use', () => {
+        showInstructionsModal();
+    });
 })();
