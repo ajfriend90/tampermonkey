@@ -16,7 +16,7 @@ This Tampermonkey script compares asset data between Quip CSV exports and a Boos
 
 ## 📥 Installation
 1. Install the [Tampermonkey browser extension](https://www.tampermonkey.net/).
-2. [Click here to install](./quip-vs-boost-compare-tool.user.js?raw=1) the latest version.
+2. [Click here to install](https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/quip-vs-boost-compare-tool/quip-vs-boost-compare-tool.user.js) the latest version.
 3. Tampermonkey will prompt you to confirm—click **Install**.
 
 ---
