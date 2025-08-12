@@ -1,0 +1,21 @@
+# OS junk files
+.DS_Store
+Thumbs.db
+
+# Node & build tools
+node_modules/
+dist/
+build/
+
+# Temp files
+*.log
+*.tmp
+
+# IDE / editor settings
+.vscode/
+.idea/
+*.swp
+
+# Backup files
+*~
+*.bak
