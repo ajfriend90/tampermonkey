@@ -384,19 +384,30 @@
         return { inQuipNotBoost, inBoostNotQuip, matchedAssets };
     }
 
-    function showResultsPopup(inQuipNotBoost, inBoostNotQuip, matchedAssets) {
-        resultsWin = resultsWin && !resultsWin.closed ? resultsWin
-        : window.open('', 'CompareResults', 'width=640,height=800,scrollbars=yes,resizable=yes');
-        const popup = resultsWin;
+    // helper: open (or reuse) the popup and wait until its document is ready
+    function getResultsPopup() {
+        resultsWin = resultsWin && !resultsWin.closed
+            ? resultsWin
+        : window.open('about:blank', 'CompareResults', 'width=640,height=800,scrollbars=yes,resizable=yes');
 
-        const html = `
-<!doctype html>
-<html>
-<head>
-  <meta charset="utf-8" />
-  <title>Compare Results</title>
-  <style>
-    :root { --bg:#0b0f14; --panel:#111823; --text:#e6edf3; --muted:#9aa7b0; --accent:#3b82f6; --border:#1e293b; --pre-bg:#0f172a; }
+        return new Promise((resolve) => {
+            const doc = resultsWin.document;
+            if (doc && doc.readyState === 'complete') return resolve(resultsWin);
+            resultsWin.addEventListener('load', () => resolve(resultsWin), { once: true });
+        });
+    }
+
+    async function showResultsPopup(inQuipNotBoost, inBoostNotQuip, matchedAssets) {
+        const win = await getResultsPopup();
+        const doc = win.document;
+
+        // reset document
+        doc.open(); doc.write('<!doctype html><html><head><meta charset="utf-8"><title>Compare Results</title></head><body></body></html>'); doc.close();
+
+        // styles
+        const style = doc.createElement('style');
+        style.textContent = `
+    :root{--bg:#0b0f14;--panel:#111823;--text:#e6edf3;--muted:#9aa7b0;--accent:#3b82f6;--border:#1e293b;--pre-bg:#0f172a}
     *{box-sizing:border-box}
     body{margin:0;padding:16px 18px 24px;background:var(--bg);color:var(--text);font:14px/1.5 system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Cantarell,Noto Sans,Arial,sans-serif}
     header{position:sticky;top:0;z-index:1;background:linear-gradient(to bottom,rgba(11,15,20,.95),rgba(11,15,20,.85));backdrop-filter:blur(6px);margin:-16px -18px 12px;padding:12px 18px;border-bottom:1px solid var(--border)}
@@ -408,87 +419,78 @@
     .count{color:var(--muted);font-weight:600;font-size:12px}
     .hint{margin:0 0 8px 0;font-size:12px;color:var(--muted)}
     ul{list-style:none;margin:0;padding:0;display:grid;gap:6px;max-height:520px;overflow:auto}
-    .item{
-      padding:6px 10px;border:1px solid var(--border);border-radius:8px;
-      background:var(--pre-bg);cursor:pointer;user-select:none;
-      font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Roboto Mono","Liberation Mono",monospace;
-      font-size:12px;line-height:1.45;
-      transition: border-color .12s ease, background-color .12s ease, transform .06s ease;
-    }
-    .item:hover{ border-color:var(--accent) }
-    .item:active{ transform: scale(0.99) }
-    .item.copied{ outline:2px solid var(--accent); }
-    .item.done { text-decoration: line-through; opacity: 0.5;}
+    .item{padding:6px 10px;border:1px solid var(--border);border-radius:8px;background:var(--pre-bg);cursor:pointer;user-select:none;
+          font-family:ui-monospace,SFMono-Regular,Menlo,Monaco,Consolas,"Roboto Mono","Liberation Mono",monospace;font-size:12px;line-height:1.45;
+          transition:border-color .12s ease, background-color .12s ease, transform .06s ease, opacity .2s ease}
+    .item:hover{border-color:var(--accent)}
+    .item:active{transform:scale(0.99)}
+    .item.copied{outline:2px solid var(--accent)}
+    .item.done{text-decoration:line-through;opacity:.5}
     footer{margin-top:14px;color:var(--muted);font-size:12px;text-align:center}
-  </style>
-</head>
-<body>
-  <header>
-    <h1>Quip ↔ Boost Comparison</h1>
-    <p class="muted">Matched assets: ${matchedAssets.length}</p>
-  </header>
+  `;
+        doc.head.appendChild(style);
 
-  <section class="grid">
-    <div class="card">
-      <h2>Quip-only <span class="count">(${inQuipNotBoost.length})</span></h2>
-      <p class="hint">Click an asset to copy</p>
-      <ul id="q-list"></ul>
-    </div>
+        // header
+        const header = doc.createElement('header');
+        const h1 = doc.createElement('h1'); h1.textContent = 'Quip ↔ Boost Comparison';
+        const p = doc.createElement('p'); p.className = 'muted'; p.textContent = `Matched assets: ${matchedAssets.length}`;
+        header.appendChild(h1); header.appendChild(p); doc.body.appendChild(header);
 
-    <div class="card">
-      <h2>Boost-only <span class="count">(${inBoostNotQuip.length})</span></h2>
-      <p class="hint">Click an asset to copy</p>
-      <ul id="b-list"></ul>
-    </div>
-  </section>
+        // section/grid
+        const section = doc.createElement('section'); section.className = 'grid'; doc.body.appendChild(section);
 
-  <footer class="muted">Window stays open for copy/paste. Resize as needed.</footer>
+        // helper to build a card
+        const buildCard = (title, count, listId) => {
+            const card = doc.createElement('div'); card.className = 'card';
+            const h2 = doc.createElement('h2'); h2.innerHTML = `${title} <span class="count">(${count})</span>`;
+            const hint = doc.createElement('p'); hint.className = 'hint'; hint.textContent = 'Click an asset to copy (and mark as done)';
+            const ul = doc.createElement('ul'); ul.id = listId;
+            card.append(h2, hint, ul); section.appendChild(card);
+        };
 
-  <script>
-    const Q = ${JSON.stringify(inQuipNotBoost)};
-    const B = ${JSON.stringify(inBoostNotQuip)};
+        buildCard('Quip-only', inQuipNotBoost.length, 'q-list');
+        buildCard('Boost-only', inBoostNotQuip.length, 'b-list');
 
-    function escapeHtml(str){ return String(str).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s])); }
-    function attrEsc(str){ return String(str).replace(/"/g,'&quot;').replace(/[&<>]/g, s=>({'&':'&amp;','<':'&lt;','>':'&gt;'}[s])); }
+        // footer
+        const footer = doc.createElement('footer');
+        footer.className = 'muted';
+        footer.textContent = 'Window stays open for copy/paste. Resize as needed.';
+        doc.body.appendChild(footer);
 
-    function render(id, arr){
-      const ul = document.getElementById(id);
-      if(!ul) return;
-      ul.innerHTML = arr.length
-        ? arr.map(a => \`<li class="item" data-asset="\${attrEsc(a)}">\${escapeHtml(a)}</li>\`).join('')
-        : '<li class="item" style="opacity:.7;cursor:default">— none —</li>';
-    }
+        // render + events
+        const copyText = (txt) => {
+            if (win.navigator.clipboard?.writeText) return win.navigator.clipboard.writeText(txt);
+            const ta = doc.createElement('textarea'); ta.value = txt; doc.body.appendChild(ta); ta.select();
+            try { doc.execCommand('copy'); } catch(e) {}
+            ta.remove(); return Promise.resolve();
+        };
 
-    function copy(text){
-      if(navigator.clipboard && navigator.clipboard.writeText){
-        return navigator.clipboard.writeText(text);
-      }
-      const ta = document.createElement('textarea');
-      ta.value = text; document.body.appendChild(ta); ta.select();
-      try { document.execCommand('copy'); } catch(e) {}
-      ta.remove(); return Promise.resolve();
-    }
+        const makeItem = (text) => {
+            const li = doc.createElement('li');
+            li.className = 'item';
+            li.textContent = text;
+            li.addEventListener('click', () => {
+                copyText(text).then(() => {
+                    li.classList.add('copied','done');
+                    setTimeout(() => li.classList.remove('copied'), 300);
+                });
+            });
+            return li;
+        };
 
-    function onItemClick(e){
-      const li = e.target.closest('.item');
-      if(!li || li.style.cursor === 'default') return;
-      const text = li.dataset.asset || li.textContent || '';
-      copy(text).then(() => {
-        li.classList.add('copied');
-        li.classList.add('done');
-        setTimeout(() => li.classList.remove('copied'), 300);
-      });
-    }
+        const renderList = (id, items) => {
+            const ul = doc.getElementById(id);
+            ul.innerHTML = '';
+            if (!items.length) {
+                const li = doc.createElement('li');
+                li.className = 'item'; li.style.opacity = '.7'; li.style.cursor = 'default';
+                li.textContent = '— none —'; ul.appendChild(li); return;
+            }
+            for (const a of items) ul.appendChild(makeItem(a));
+        };
 
-    document.addEventListener('click', onItemClick);
-    render('q-list', Q);
-    render('b-list', B);
-  </script>
-</body>
-</html>`;
-        popup.document.open();
-        popup.document.write(html);
-        popup.document.close();
+        renderList('q-list', inQuipNotBoost);
+        renderList('b-list', inBoostNotQuip);
     }
 
     GM_registerMenuCommand('Compare CSVs', async () => {
