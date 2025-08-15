@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Quip vs Boost Compare Tool
 // @namespace    https://github.com/ajfriend90/tampermonkey
-// @version      2.0
+// @version      2.0.1
 // @description  Load exported CSVs of Quip and Boost and display Asset IDs for discrepencies
 // @author       ajfriend
 // @match        *://*.quip-amazon.com/*
