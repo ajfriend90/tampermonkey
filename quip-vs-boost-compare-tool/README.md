@@ -33,5 +33,6 @@ This Tampermonkey script compares asset data between Quip CSV exports and a Boos
 ---
 
 ## 📄 Version History
+- **2.0.1** — Updated showResultsPopup() function to not use inline script or document.write() to fix issue where results wouldn't print
 - **2.0** — Multi-Quip upload support, clickable asset copy, improved UI
 - **1.0** — Initial release
