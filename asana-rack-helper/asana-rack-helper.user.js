@@ -744,27 +744,44 @@
       return pane;
     };
 
-    window.AsanaHelper.asana.setTextCustomFieldInPane = async function setTextCustomFieldInPane(paneEl, fieldName, value) {
+    window.AsanaHelper.asana.setTextCustomFieldInPane = async function setTextCustomFieldInPane(paneEl, fieldName, value, { required = true } = {}) {
       if (!paneEl) throw new Error('paneEl missing');
       const wanted = String(fieldName).trim();
 
       const span = paneEl.querySelector(`span[aria-label="${CSS.escape(wanted)}"]`);
-      if (!span) throw new Error(`Field label span not found: "${wanted}"`);
+      if (!span) {
+        if (required) throw new Error(`Field label span not found: "${wanted}"`);
+        window.AsanaHelper.log.warn(`Optional field missing, skipping: "${wanted}"`);
+        return false;
+      } 
 
       const label = span.closest('label');
       const labelId = label?.id;
-      if (!labelId) throw new Error(`Label id not found for "${wanted}"`);
+      if (!labelId) {
+        if (required) throw new Error(`Label id not found for "${wanted}"`);
+        window.AsanaHelper.log.warn(`Optional field missing label id, skipping: "${wanted}"`);
+        return false;
+      }
 
       const input = paneEl.querySelector(`textarea[aria-labelledby="${CSS.escape(labelId)}"]`)
                 || paneEl.querySelector(`input[aria-labelledby="${CSS.escape(labelId)}"]`);
 
-      if (!input) throw new Error(`Input not found for "${wanted}" using aria-labelledby=${labelId}`);
+      if (!input) {
+        if (required) throw new Error(`Input not found for "${wanted}" using aria-labelledby=${labelId}`);
+        window.AsanaHelper.log.warn(`Optional field input missing, skipping: "${wanted}"`);
+        return false;
+      }
 
       input.focus();
       const ok = window.AsanaHelper.utils.setNativeValue(input, String(value ?? ''));
-      if (!ok) throw new Error(`Could not set value for "${wanted}" (unexpected input type)`);
+      if (!ok) {
+        if (required) throw new Error(`Could not set value for "${wanted}"`);
+        window.AsanaHelper.log.warn(`Optional field not editable, skipping: "${wanted}"`);
+        return false;
+      }
 
       await this.sleep(80);
+      return true;
     };
 
     window.AsanaHelper.asana.createAndFillOneTask = async function createAndFillOneTask(fieldMap) {
@@ -776,10 +793,10 @@
 
       const pane = await this.openDetailsForFocusedRow();
 
-      await this.setTextCustomFieldInPane(pane, 'Asset (ID)', fieldMap.assetId);
-      await this.setTextCustomFieldInPane(pane, 'Brick', fieldMap.brickName);
-      await this.setTextCustomFieldInPane(pane, 'Vendor', fieldMap.vendor);
-      await this.setTextCustomFieldInPane(pane, 'Uplinks', fieldMap.uplinks);
+      await this.setTextCustomFieldInPane(pane, 'Asset (ID)', fieldMap.assetId, { requried: false });
+      await this.setTextCustomFieldInPane(pane, 'Brick', fieldMap.brickName, { required: false });
+      await this.setTextCustomFieldInPane(pane, 'Vendor', fieldMap.vendor, { required: false });
+      await this.setTextCustomFieldInPane(pane, 'Uplinks', fieldMap.uplinks, { required: false });
 
       const buildingOption = window.AsanaHelper.utils.normalizeBuilding(fieldMap.building);
       const buildingSetOk = await this.setEnumCustomFieldInPane(pane, 'Building', buildingOption);
@@ -788,11 +805,11 @@
       }
 
       await this.setEnumCustomFieldInPane(pane, 'Rack Type (ID)', fieldMap.rackTypeAsana);
-      await this.setTextCustomFieldInPane(pane, 'Rack Type Raw', fieldMap.rackTypeRaw);
+      await this.setTextCustomFieldInPane(pane, 'Rack Type Raw', fieldMap.rackTypeRaw, { required: false });
 
-      await this.setSlaDate(pane, fieldMap.SLA);
+      await this.setSlaDate(pane, fieldMap.SLA, { required: false });
       const slaRawStr = `${fieldMap.SLA?.mdy || ''} ${fieldMap.SLA?.time12 || ''}`.trim();
-      await this.setTextCustomFieldInPane(pane, 'SLA Raw', slaRawStr);
+      await this.setTextCustomFieldInPane(pane, 'SLA Raw', slaRawStr, { required: false });
 
       window.AsanaHelper.log.info('Asana: filled text fields ✅', fieldMap.assetId);
       return { ok: true, warnings };
@@ -980,7 +997,7 @@
       return true;
     };
 
-    window.AsanaHelper.asana.setSlaDate = async function setSlaDate(paneEl, sla) {
+    window.AsanaHelper.asana.setSlaDate = async function setSlaDate(paneEl, sla, { required = true } = {}) {
       const u = window.AsanaHelper.utils;
       const log = window.AsanaHelper.log;
       const FIELD_LABEL = 'SLA Date (ID)';
@@ -994,10 +1011,18 @@
       const wrapper = paneEl.querySelector(
         `div.CustomPropertyDateValueInput[aria-label="${CSS.escape(FIELD_LABEL)}"]`
       );
-      if (!wrapper) throw new Error(`SLA field wrapper not found: ${FIELD_LABEL}`);
+      if (!wrapper) {
+        if (required) throw new Error(`SLA field wrapper not found: ${FIELD_LABEL}`);
+        log.warn(`Optional field missing, skipping: "${FIELD_LABEL}"`);
+        return false;
+      }
 
       const tokenBtn = wrapper.querySelector(`div[role="button"][aria-label="${CSS.escape(FIELD_LABEL)}"]`);
-      if (!tokenBtn) throw new Error('SLA token button not found');
+      if (!tokenBtn) {
+        if (required) throw new Error('SLA token button not found');
+        log.warn(`Optional SLA token button missing, skipping: "${FIELD_LABEL}"`);
+        return false;
+      }
 
       tokenBtn.click();
       await this.sleep(200);
