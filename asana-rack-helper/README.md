@@ -11,7 +11,7 @@ Tampermonkey userscript for creating and populating Asana rack tasks from asset 
 ## Installation
 1. Install Tampermonkey
 2. Open:
-   https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/asana-rack-helper/asana-rack-helper.js
+   https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/asana-rack-helper/asana-rack-helper.user.js
 3. Click **Install**
 
 ## Updating

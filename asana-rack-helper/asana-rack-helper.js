@@ -9,8 +9,8 @@
 // @connect      platform.bpds.boost.aws.a2z.com
 // @connect      racks.aka.amazon.com
 // @run-at       document-idle
-// @downloadURL  https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/asana-rack-helper/asana-rack-helper.js
-// @updateURL    https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/asana-rack-helper/asana-rack-helper.js
+// @downloadURL  https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/asana-rack-helper/asana-rack-helper.user.js
+// @updateURL    https://raw.githubusercontent.com/ajfriend90/tampermonkey/main/asana-rack-helper/asana-rack-helper.user.js
 // ==/UserScript==
 
 (function () {
