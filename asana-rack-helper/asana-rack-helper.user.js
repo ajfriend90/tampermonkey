@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Asana Rack Helper
 // @namespace    https://github.com/ajfriend90/tampermonkey
-// @version      1.0.0
+// @version      1.0.1
 // @description  Create and populate Asana tasks from rack asset IDs (Boost + RACKS).
 // @author       Joey Friend (@ajfriend)
 // @match        https://app.asana.com/*
@@ -16,7 +16,7 @@
 (function () {
   'use strict';
     window.AsanaHelper = window.AsanaHelper || {};
-    window.AsanaHelper.VERSION = '1.0.0';
+    window.AsanaHelper.VERSION = '1.0.1';
     window.AsanaHelper.config = {
       API: {
         RACKS: "https://racks.aka.amazon.com/api/racks/",
@@ -789,7 +789,7 @@
       const warnings = [];
 
       await this.clickAddTask();
-      await this.setFocusedTaskName(fieldMap.rackPosition);
+      await this.setFocusedTaskName(fieldMap.rackPosition + "   " + fieldMap.assetId);
 
       const pane = await this.openDetailsForFocusedRow();
 
