@@ -6,7 +6,7 @@
 // @author       Joey Friend (@ajfriend)
 // @match        https://app.asana.com/*
 // @grant        GM_xmlhttpRequest
-// @grant		 GM_registerMenuCommand
+// @grant		     GM_registerMenuCommand
 // @connect      platform.bpds.boost.aws.a2z.com
 // @connect      racks.aka.amazon.com
 // @run-at       document-idle
@@ -17,7 +17,7 @@
 (function () {
   'use strict';
     window.AsanaHelper = window.AsanaHelper || {};
-    window.AsanaHelper.VERSION = '1.0.1';
+    window.AsanaHelper.VERSION = '1.0.2';
     window.AsanaHelper.config = {
       API: {
         RACKS: "https://racks.aka.amazon.com/api/racks/",
