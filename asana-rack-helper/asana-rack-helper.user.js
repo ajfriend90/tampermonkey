@@ -1,11 +1,12 @@
 // ==UserScript==
 // @name         Asana Rack Helper
 // @namespace    https://github.com/ajfriend90/tampermonkey
-// @version      1.0.1
+// @version      1.0.2
 // @description  Create and populate Asana tasks from rack asset IDs (Boost + RACKS).
 // @author       Joey Friend (@ajfriend)
 // @match        https://app.asana.com/*
 // @grant        GM_xmlhttpRequest
+// @grant		 GM_registerMenuCommand
 // @connect      platform.bpds.boost.aws.a2z.com
 // @connect      racks.aka.amazon.com
 // @run-at       document-idle
@@ -753,7 +754,7 @@
         if (required) throw new Error(`Field label span not found: "${wanted}"`);
         window.AsanaHelper.log.warn(`Optional field missing, skipping: "${wanted}"`);
         return false;
-      } 
+      }
 
       const label = span.closest('label');
       const labelId = label?.id;
@@ -1462,13 +1463,10 @@
     const container = document.createElement('div');
     container.id = WIDGET_ID;
 
-    const savedPos = window.AsanaHelper.ui.loadPos();
-    if (savedPos && typeof savedPos.left === 'number' && typeof savedPos.top === 'number') {
-      container.style.right = 'auto';
-      container.style.bottom = 'auto';
-      container.style.left = `${savedPos.left}px`;
-      container.style.top = `${savedPos.top}px`;
-    }
+	  container.style.right = '16px';
+	  container.style.bottom = '16px';
+	  container.style.left = 'auto';
+	  container.style.top = 'auto';
 
     const hdr = document.createElement('div');
     hdr.className = 'hdr';
@@ -1504,8 +1502,16 @@
     collapseBtn.title = 'Collapse / expand';
     collapseBtn.textContent = '▾'; // will flip based on state
 
+	  const btnClose = document.createElement('button');
+	  btnClose.textContent = '✕';
+	  btnClose.title = 'Close';
+	  btnClose.addEventListener('click', () => {
+		  container.remove();
+	  });
+
     right.appendChild(pill);
     right.appendChild(collapseBtn);
+	  right.appendChild(btnClose);
 
     hdr.appendChild(left);
     hdr.appendChild(right);
@@ -1852,9 +1858,12 @@
     document.body.appendChild(container);
   }
 
+  GM_registerMenuCommand('Open Asana Rack Helper', () => {
+	  createWidget();
+  });
+
   function init() {
     injectStyle(ROOT_CSS);
-    createWidget();
   }
 
   init();
