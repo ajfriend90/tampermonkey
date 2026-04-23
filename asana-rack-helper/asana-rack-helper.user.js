@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Asana Rack Helper
 // @namespace    https://github.com/ajfriend90/tampermonkey
-// @version      1.0.2
+// @version      1.0.3
 // @description  Create and populate Asana tasks from rack asset IDs (Boost + RACKS).
 // @author       Joey Friend (@ajfriend)
 // @match        https://app.asana.com/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict';
     window.AsanaHelper = window.AsanaHelper || {};
-    window.AsanaHelper.VERSION = '1.0.2';
+    window.AsanaHelper.VERSION = '1.0.3';
     window.AsanaHelper.config = {
       API: {
         RACKS: "https://racks.aka.amazon.com/api/racks/",
@@ -277,6 +277,7 @@
       if (has('B300')) return 'B300';
 
       // 4) The rest are straightforward "contains"
+      if (has('C8GN')) return 'C8GN'
       if (has('GLACIER')) return 'Glacier';
       if (has('EBS')) return 'EBS';
       if (has('S3')) return 'S3';
