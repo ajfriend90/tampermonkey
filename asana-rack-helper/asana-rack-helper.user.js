@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Asana Rack Helper
 // @namespace    https://github.com/ajfriend90/tampermonkey
-// @version      1.0.3
+// @version      1.0.4
 // @description  Create and populate Asana tasks from rack asset IDs (Boost + RACKS).
 // @author       Joey Friend (@ajfriend)
 // @match        https://app.asana.com/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict';
     window.AsanaHelper = window.AsanaHelper || {};
-    window.AsanaHelper.VERSION = '1.0.3';
+    window.AsanaHelper.VERSION = '1.0.4';
     window.AsanaHelper.config = {
       API: {
         RACKS: "https://racks.aka.amazon.com/api/racks/",
@@ -1029,10 +1029,7 @@
       tokenBtn.click();
       await this.sleep(200);
 
-      const picker = document.querySelector('.DatePicker-container');
-      if (!picker) throw new Error('DatePicker popup not found');
-
-      const dateInput = picker.querySelector('#due_date_input_id_select');
+      const dateInput = document.querySelector('#due_date_input_id_select');
       if (!dateInput) throw new Error('Date input #due_date_input_id_select not found');
 
       dateInput.focus();
