@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Asana Rack Helper
 // @namespace    https://github.com/ajfriend90/tampermonkey
-// @version      1.0.4
+// @version      1.0.5
 // @description  Create and populate Asana tasks from rack asset IDs (Boost + RACKS).
 // @author       Joey Friend (@ajfriend)
 // @match        https://app.asana.com/*
@@ -17,7 +17,7 @@
 (function () {
   'use strict';
     window.AsanaHelper = window.AsanaHelper || {};
-    window.AsanaHelper.VERSION = '1.0.4';
+    window.AsanaHelper.VERSION = '1.0.5';
     window.AsanaHelper.config = {
       API: {
         RACKS: "https://racks.aka.amazon.com/api/racks/",
@@ -91,6 +91,7 @@
         location: get('location'),
         position: get('position'),
         brickName: get('brickName'),
+        brickStatus: get('brickStatus'),
         rackType: get('rackType'),
         uplinkConfig: get('uplinkConfig'),
         vendor: get('vendor')
@@ -503,6 +504,7 @@
           { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "location" },
           { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "position" },
           { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "brickName" },
+          { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "brickStatus"},
           { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "rackType" },
           { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "uplinkConfig" },
           { fieldType: "FIELD_ALIAS", requestedOutputFieldValue: "vendor" }
@@ -625,6 +627,7 @@
         building: selected.location || '',
         rackPosition: window.AsanaHelper.utils.buildRackPosition(selected.location, selected.position),
         brickName: selected.brickName || '',
+        brickStatus: selected.brickStatus || '',
         rackTypeRaw: selected.rackType || '',
         rackTypeAsana: window.AsanaHelper.utils.normalizeRackTypeForAsana(selected.rackType),
         vendor: selected.vendor || '',
@@ -812,6 +815,9 @@
       await this.setSlaDate(pane, fieldMap.SLA, { required: false });
       const slaRawStr = `${fieldMap.SLA?.mdy || ''} ${fieldMap.SLA?.time12 || ''}`.trim();
       await this.setTextCustomFieldInPane(pane, 'SLA Raw', slaRawStr, { required: false });
+
+      const statusValue = (fieldMap.brickStatus === 'INFLIGHT') ? 'Brick Inflight' : 'Pending Delivery';
+      await this.setEnumCustomFieldInPane(pane, 'Status (ID)', statusValue);
 
       window.AsanaHelper.log.info('Asana: filled text fields ✅', fieldMap.assetId);
       return { ok: true, warnings };
@@ -1731,6 +1737,7 @@
           building: r.fieldMap?.building,
           pos: r.fieldMap?.rackPosition,
           brickName: r.fieldMap?.brickName,
+          brickStatus: r.fieldMap?.brickStatus,
           rackTypeRaw: r.fieldMap?.rackTypeRaw,
           vendor: r.fieldMap?.vendor,
           fabric: r.fieldMap?.fabric,
